@@ -33,6 +33,7 @@ stn_list = as.data.frame(unique(RF_data$Stn_No))
 
 gg_rainfall <- RF_data2 %>% 
   #filter(Complete == "Y") %>% 
+  filter(Duration == 1) %>% 
   ggplot(aes(x = Year, y = Depth)) +
   geom_point(aes(shape = ".", alpha = 0.5, color = factor(Complete)), na.rm = T) +
   geom_text_repel(aes(label = ifelse(Depth > 300 | Depth < 10, 
@@ -53,7 +54,7 @@ gg_rainfall <- RF_data2 %>%
         legend.position = "bottom",
         axis.text.y = element_text(size = 5),
         axis.text.x = element_text(angle = 0, hjust = 0.5, size = 5)) +
-  labs(title = paste0("Annual Maximum Rainfall by Duration"),
+  labs(title = paste0("Annual Maximum Rainfall (1 hr)"),
        color = "Complete") +
   guides(alpha = "none", shape = "none")
 
@@ -65,7 +66,9 @@ ggplotly(gg_rainfall, #tooltip = "text",
   rangeslider()
 
 ### print last plot to file
-ggsave(paste0("RF_AM_", a_name, "_scatter_notclean.jpg"), dpi = 300,
+ggsave(paste0("RF_AM1h_", a_name, "_scatter_notclean.jpg"), dpi = 300,
+       width = 10, height = 6, units = "in")
+ggsave(paste0("RF_AM1h_", a_name, "_scatter_clean1.jpg"), dpi = 300,
        width = 10, height = 6, units = "in")
 
 
@@ -73,8 +76,8 @@ ggsave(paste0("RF_AM_", a_name, "_scatter_notclean.jpg"), dpi = 300,
 RF_data2 <- RF_data %>% 
   filter(Year != 2021) %>%  #remove incomplete year considered as complete
   filter(Stn_No != 5503042 & Stn_No != 6007063) %>%   #remove questionable station 6007063
-  filter(Complete == "Y") %>% 
-  filter(Depth > 20)
+  filter(Complete == "Y") #%>% 
+  #filter(Depth > 20)
 
 
 
@@ -130,6 +133,7 @@ dur_list <- data.frame(unique(RF_data$Duration))
 for (i in 1:nrow(dur_list)) {
   
   dur_sel = dur_list[i, 1]
+  #dur_sel = 1
   
   gg_rainfall_stn <- RF_data2 %>% 
     filter(Duration == dur_sel) %>% 
@@ -165,7 +169,7 @@ for (i in 1:nrow(dur_list)) {
   
 
   ### print last plot to file
-  ggsave(paste0("RF_AM_", a_name, "_dur", dur_sel, "h_clean2.jpg"), dpi = 300,
+  ggsave(paste0("RF_AM_", a_name, "_dur", dur_sel, "h_clean3.jpg"), dpi = 300,
          width = 10, height = 6, units = "in")
   
 }
@@ -253,7 +257,7 @@ ggsave(paste0(a_name, "_stn_map.jpg"), dpi = 300,
 
 ## subset 
 RF_data_y2020 <- RF_data2 %>% 
-  filter(Year == "2020", Duration == 24)
+  filter(Year == "2020", Duration == 1)
 
 str(RF_stn)
 
@@ -265,6 +269,7 @@ names(RF_stn2)[1] <- "Stn_No"
 names(RF_stn2)[4] <- "Lat"
 names(RF_stn2)[5] <- "Long"
   
+max(RF_data_y2020$Depth)
 
 
 ## join data
@@ -324,21 +329,21 @@ map_rf_y2020 <- ggplot() +
   #                     colors = c("#ffffcf", "#6fc4ad", "#1d7eb3", "#1a4998", "purple4"),
   #                     values = rescale(c(0, 1000, 2000, 3000, 4000)),
   #                     limits = c(0, 4000)) +
-  scale_fill_distiller(name="Max 1D Rainfall (mm)", 
+  scale_fill_distiller(name="Max 1h Rainfall (mm)", 
                        palette = "Spectral", direction = 1,
                        #na.value = "purple",
                        oob = scales::squish, # squish out of bound values to nearest extreme
-                       breaks = seq(0, 450, by = 100),
-                       limits = c(0, 450)) + # set fixed legend) +
-  geom_polygon(data = basin_shp2, aes(x = long, y = lat, group = group),
-               colour = "white", fill = NA) +
+                       breaks = seq(0, 120, by = 30),
+                       limits = c(0, 120)) + # set fixed legend) +
+  #geom_polygon(data = basin_shp2, aes(x = long, y = lat, group = group),
+  #             colour = "white", fill = NA) +
   geom_polygon(data = sel_shp2, aes(x = long, y = lat, group = group),
                colour = "grey60", size = 0.1, fill = NA) +
   theme_void() + 
   theme(legend.title = element_text(size = 10), 
         legend.position = "bottom",
-        legend.text = element_text(size = 10)) +
-  labs(title = paste0(a_name, " Basin Annual Maximum 1D Rainfall Distribution"),
+        legend.text = element_text(size = 6)) +
+  labs(title = paste0(a_name, " Basin Annual Maximum 1h Rainfall Distribution"),
        subtitle = "2020") +
   coord_fixed() +
   guides(fill = guide_colorbar(label.position = "bottom", title.hjust = 0.9, 
@@ -347,7 +352,7 @@ map_rf_y2020 <- ggplot() +
 map_rf_y2020
 
 #print last plot to file
-ggsave(paste0(a_name, "_RF_AM1D_2020_lg450.jpg"), dpi = 300,
+ggsave(paste0(a_name, "_RF_AM1h_2020_lg260.jpg"), dpi = 300,
        width = 5, height = 4, units = "in")
 
 
@@ -391,7 +396,7 @@ plot(y2019_KRIG)
 
 RF_data_stn <- RF_data2 %>% 
   merge(RF_stn2, by = "Stn_No") %>% 
-  filter(Duration == 24)
+  filter(Duration == 1)
 
 str(RF_data_stn)
 
@@ -473,8 +478,8 @@ for (j in 1:length(interp_list)) {
                          palette = "Spectral", direction = 1,
                          #na.value = "purple",
                          oob = scales::squish, # squish out of bound values to nearest extreme
-                         breaks = seq(0, 450, by = 50),
-                         limits = c(0, 450)) + # set fixed legend) +
+                         breaks = seq(0, 120, by = 30),
+                         limits = c(0, 120)) + # set fixed legend) +
     geom_polygon(data = basin_shp2, aes(x = long, y = lat, group = group),
                  colour = "white", fill = NA) +
     geom_polygon(data = sel_shp2, aes(x = long, y = lat, group = group),
@@ -513,7 +518,7 @@ mylegend <- g_legend(map_rf_y2020)
 facet_map <- grid.arrange(grobs = maplist[1:47], ncol = 10)
 
 #### title font format
-title = grid::textGrob(paste0(a_name, ' Basin (Sg Kupang subbasin) Annual Maximum 1D Rainfall\n'), 
+title = grid::textGrob(paste0(a_name, ' Basin (Sg Kupang subbasin) Annual Maximum 1h Rainfall\n'), 
                        gp = grid::gpar(fontsize = 14))
 
 facet_legend_map <- grid.arrange(facet_map, mylegend, 
@@ -528,7 +533,7 @@ facet_legend_map <- grid.arrange(facet_map, mylegend,
 
 
 #print last plot to file
-ggsave(paste0(a_name, "_RF_AM1D_annual_lg450.jpg"), facet_legend_map, dpi = 400,
+ggsave(paste0(a_name, "_RF_AM1h_annual_lg120.jpg"), facet_legend_map, dpi = 400,
        width = 17, height = 10, units = "in")
 
 #########################
@@ -538,8 +543,7 @@ ggsave(paste0(a_name, "_RF_AM1D_annual_lg450.jpg"), facet_legend_map, dpi = 400,
 
 ## set palette 
 col_pal <- brewer.pal(n = 11, name = "Spectral")
-#col_brk <- c(0, 25, 50, 75, 100, 125, 150, 200, 250, 300, 350, 460)
-col_brk <- c(0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 460)
+col_brk <- c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 260)
 
 
 ## map
@@ -549,16 +553,16 @@ col_brk <- c(0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 460)
 map_cl_AM_2020 <- ggplot() +
   geom_raster(data = as.data.frame(y2020_IDW_mask, xy=TRUE, na.rm = TRUE), 
               aes(x = x, y = y, fill = var1.pred)) +
-  scale_fill_stepsn(name = "Max 1D Rainfall (mm)",
+  scale_fill_stepsn(name = "Max 1h Rainfall (mm)",
                     #n.breaks = 3, 
                     colours = col_pal,
                     breaks = col_brk,
                     values = rescale(col_brk),
-                    limits = c(0, 460)) +
+                    limits = c(0, 260)) +
   #geom_polygon(data = basin_shp2, aes(x = long, y = lat, group = group),
   #             colour = "white", fill = NA) +
   geom_polygon(data = sel_shp2, aes(x = long, y = lat, group = group),
-               colour = "grey80", size = 0.1, fill = NA) +
+               colour = "grey60", size = 0.1, fill = NA) +
   geom_point(data = RF_y2020, aes(x = Long, y = Lat),
              color = 'red', size = 0.5, alpha = 0.5) +
   theme_void() + 
@@ -567,7 +571,7 @@ map_cl_AM_2020 <- ggplot() +
         legend.title = element_text(size = 10), 
         legend.position = "bottom",
         legend.text = element_text(size = 6)) +
-  labs(title = paste0(a_name, " Basin Annual Maximum 1D Rainfall Distribution"),
+  labs(title = paste0(a_name, " Basin Annual Maximum 1h Rainfall Distribution"),
        subtitle = "2020") +
   coord_fixed() +
   guides(fill = guide_colorbar(label.position = "bottom", title.hjust = 0.9, 
@@ -576,7 +580,7 @@ map_cl_AM_2020 <- ggplot() +
 map_cl_AM_2020
 
 #print last plot to file
-ggsave(paste0(a_name, "_RF_AM1D_2020_lgc1.jpg"), dpi = 300,
+ggsave(paste0(a_name, "_RF_AM1h_2020_lgc1.jpg"), dpi = 300,
        width = 6, height = 4, units = "in")
 
 
@@ -601,11 +605,11 @@ for (m in 1:length(interp_list)) {
                       colours = col_pal,
                       breaks = col_brk,
                       values = rescale(col_brk),
-                      limits = c(0, 460)) +
+                      limits = c(0, 260)) +
     #geom_polygon(data = basin_shp2, aes(x = long, y = lat, group = group),
     #             colour = "white", fill = NA) +
     geom_polygon(data = sel_shp2, aes(x = long, y = lat, group = group),
-                 colour = "grey80", size = 0.1, fill = NA) +
+                 colour = "grey60", size = 0.1, fill = NA) +
     geom_point(data = sel_pt, aes(x = Long, y = Lat),
                color = 'red', size = 0.5, alpha = 0.5) +
     theme_void() + 
@@ -633,11 +637,11 @@ mylegend_cl <- g_legend(map_cl_AM_2020)
 facet_map_cl <- grid.arrange(grobs = maplist_cl[1:47], ncol = 10)
 
 #### title font format
-title = grid::textGrob(paste0(a_name, ' Basin (Sg Kupang subbasin) Annual Maximum 1D Rainfall\n'), 
+title2 = grid::textGrob(paste0(a_name, ' Basin (Sg Kupang subbasin) Annual Maximum 1h Rainfall\n'), 
                        gp = grid::gpar(fontsize = 14))
 
 facet_legend_map_cl <- grid.arrange(facet_map_cl, mylegend_cl, 
-                                 top = title, 
+                                 top = title2, 
                                  nrow = 2, heights = c(9, 1)
                                  #ncol = 2, widths = c(9, 1)
 )
@@ -646,7 +650,7 @@ facet_legend_map_cl <- grid.arrange(facet_map_cl, mylegend_cl,
 
 
 #print last plot to file
-ggsave(paste0(a_name, "_RF_AM1D_annual_lgc2_pt.jpg"), facet_legend_map_cl, dpi = 400,
+ggsave(paste0(a_name, "_RF_AM1h_annual_lgc1_pt.jpg"), facet_legend_map_cl, dpi = 400,
        width = 17, height = 10, units = "in")
 
 
