@@ -1,0 +1,422 @@
+# VISUALIZATION
+
+# load packages
+library(tidyverse)
+library(lubridate)
+library(plotly)
+
+# set strings as factors to false
+options(stringsAsFactors = FALSE)
+
+#set working directory
+setwd('J:/Backup_main/2022/20211221_Banjir_2021/Data/PUBLIC INFO BANJIR')
+setwd('E:/Backup_main/2022/20211221_Banjir_2021/Data/PUBLIC INFO BANJIR')
+
+
+#import data
+RF_data = read.csv("IB_RF_202112_clean.csv", header = T, sep = ",")
+
+#set format
+str(RF_data)
+RF_data$Datetime <- as.POSIXct(RF_data$Datetime, format = "%Y-%m-%d %H:%M")
+
+
+# CHECK OUTLIERS
+## 15 min CHART
+
+gg_rainfall <- RF_data %>% 
+  ggplot(aes(x = Datetime, y = Depth)) +
+  geom_point(aes(shape = ".", alpha = 0.5, color = RF_stn), na.rm = T) +
+  theme_bw(base_size = 10) +
+  scale_x_datetime(name= "Datetime", date_labels = "%b %d",
+                   date_breaks = "1 day",
+                   #date_minor_breaks = "1 day",
+                   minor_breaks = NULL) + #x axis format
+  scale_y_continuous(name= paste("Rainfall (mm)"),
+                     minor_breaks = NULL) + #y axis format
+  theme(text=element_text(family = "Roboto", color = "grey20"),
+        panel.grid.major.x = element_blank(),
+        legend.position = "none",
+        axis.text.x = element_text(angle = 90, hjust = 0.5)) +
+  labs(title = "15 min Rainfall (December 2021)")
+
+gg_rainfall
+
+ggplotly(gg_rainfall, #tooltip = "text",
+         width = 1000, height = 500,
+         dynamicTicks = TRUE) %>% 
+  rangeslider()
+
+
+# clean data based on chart above
+
+RF_data2 <- RF_data %>% 
+  filter(Depth < 100)
+
+
+# AGGREGATE DATA TO DAILY
+# ignore incomplete data
+
+RF_data_day <- RF_data2 %>% 
+  mutate(Date = date(Datetime)) %>% 
+  group_by(RF_stn, Station.Name, Date) %>% 
+  summarise(Depth_day = sum(Depth, na.rm = T), cnt = sum(!is.na(Depth)))
+
+
+# AGGREGATE DATA TO HOURLY
+# ignore incomplete data
+
+RF_data_hr <- RF_data2 %>% 
+  mutate(Date = date(Datetime), Hour = hour(Datetime)) %>% 
+  group_by(RF_stn, Station.Name, Date, Hour) %>% 
+  summarise(Depth_hr = sum(Depth, na.rm = T), cnt = sum(!is.na(Depth))) 
+
+
+#combine columns (date and hour)
+RF_data_hr2 <- RF_data_hr %>% 
+  mutate(Hour = paste0(Hour, ":00")) %>% 
+  #mutate(Datetime = make_datetime(year(Date), month(Date), day(Date), hour(Hour)))
+  unite(Datetime, c(Date, Hour), sep = " ")
+
+#format date
+RF_data_hr2$Datetime <- as.POSIXct(RF_data_hr2$Datetime, format = "%Y-%m-%d %H:%M")
+
+str(RF_data_hr2)
+
+
+
+#########################################
+# RUNNING AVERAGE
+
+
+
+
+#########################################
+# MAPPING
+
+library(sf) # processing spatial vector data
+library(sp) # another vector data package necessary for continuity
+library(raster) # processing spatial raster data. !!!overwrites dplyr::select!!!
+library(rgdal) # read shapefile
+library(mapproj)
+library(tmap) # animation
+
+library(gridExtra)
+
+library(viridis)
+library(RColorBrewer)
+library(scales)
+
+# And a lot of different packages to test their interpolation functions
+library(gstat)  # inverse distance weighted, Kriging
+library(fields) # Thin Plate Spline
+library(automap)# Automatic approach to Kriging
+
+
+# import coordinate data
+
+IB_stn = read.csv("E:/Backup_main/2022/20211221_Banjir_2021/Data/Rainfall/PRABN_stn_KLSel.csv", 
+                  header = T, sep = ",")
+
+str(IB_stn)
+
+
+# map country and coordinate data
+
+## shapefile
+pm_shp <- readOGR("E:/Backup_main/GIS_data/Boundary/state/state_pmsia_short.shp",
+                  stringsAsFactors = F)
+
+sel_shp <- subset(pm_shp, STATE %in% c("Selangor", "Kuala Lumpur"))
+
+crs(sel_shp)
+
+### change projection to WGS84 (original Kertau)
+pm_shp2 <-spTransform(pm_shp, CRS("+proj=longlat +ellps=WGS84 +datum=WGS84"))
+sel_shp2 <-spTransform(sel_shp, CRS("+proj=longlat +ellps=WGS84 +datum=WGS84"))
+
+
+# layout map
+
+map <- ggplot() + 
+  geom_polygon(data = pm_shp2, aes(x = long, y = lat, group = group), 
+               fill = "grey", alpha = 0.3, colour = "white") +
+  geom_point(data = IB_stn, aes(x = Longitude, y = Latitude),
+              color = 'red', size = 1, alpha = 0.5) +
+  coord_map(xlim=c(100.5, 102), ylim=c(2.5, 3.9)) +
+  theme_void()
+
+map
+
+
+# AGGREGATE DATA
+
+
+
+
+
+# INTERPOLATE (one day first)
+
+# subset 
+RF_data_day_18 <- RF_data_hr2 %>% 
+  filter(Datetime >= "2021-12-17 17:00" & Datetime < "2021-12-17 18:00")
+
+# join data
+RF_day18 <- RF_data_day_18 %>% 
+  merge(IB_stn, by = "Station.Name")
+
+# convert df to spatial
+sf_day18 <- st_as_sf(RF_day18, coords = c('Longitude', 'Latitude'), crs = 4326)
+plot(sf_day18)
+
+
+# create raster template
+ras_interp_template <- raster(sel_shp2, res = 0.01)
+
+# make sure same projection
+crs(ras_interp_template)
+crs(sf_day18)
+
+#plot(ras_interp_template)
+
+
+## Nearest Neighbour
+fit_NN <- gstat::gstat( # using package {gstat} 
+  formula = Depth_day ~ 1,    # The column  we are interested in
+  data = as(sf_day18, "Spatial"), # using {sf} and converting to {sp}, which is expected
+  nmax = 10, nmin = 3 # Number of neighboring observations used for the fit
+)
+d18_NN <- interpolate(ras_interp_template, fit_NN)
+plot(d18_NN)
+d18_NN_mask <- mask(d18_NN, mask = sel_shp2)
+plot(d18_NN_mask)
+
+
+# Inverse Distance Weighting
+fit_IDW <- gstat::gstat( # The setup here is quite similar to NN
+  formula = Depth_hr ~ 1,
+  locations = sf_day18,
+  nmax = 10, nmin = 3,
+  set = list(idp = 0.5) # inverse distance power
+)
+d18_IDW <- interpolate(ras_interp_template, fit_IDW)
+plot(d18_IDW)
+d18_IDW_mask <- mask(d18_IDW, mask = sel_shp2)
+plot(d18_IDW_mask)
+
+class(d18_IDW_mask)
+
+## overlay map
+
+maprf1218 <- ggplot() +
+  geom_raster(data = as.data.frame(d18_IDW_mask, xy=TRUE, na.rm = TRUE), 
+              aes(x = x, y = y, fill = var1.pred)) +
+  scale_fill_gradientn(name="Rainfall (mm)", 
+                       colors = c("#ffffcf", "#6fc4ad", "#1d7eb3", "#1a4998"),
+                       values = rescale(c(0, 10, 30, 60)),
+                       na.value = "purple",
+                       limits = c(0, 60)) +
+  #scale_fill_distiller(name="Rainfall (mm)", 
+  #                     palette = "YlGnBu", direction = 1,
+                       #na.value = "purple",
+  #                     oob = scales::squish, # squish out of bound values to nearest extreme
+  #                     breaks = seq(0, 60, by = 10),
+  #                     limits = c(0, 60)) + # set fixed legend) +
+  geom_polygon(data = sel_shp2, aes(x = long, y = lat, group = group),
+               colour = "white", fill = NA) +
+  theme_void() + 
+  labs(title="18 December 2021 Rainfall Distribution") +
+  coord_fixed()
+
+maprf1218
+
+#print last plot to file
+ggsave(paste0("KLSel_rainfall_202112hr.jpg"), dpi = 300,
+       width = 6, height = 5, units = "in")
+
+
+
+# Thin Plate Spline Regression
+fit_TPS <- fields::Tps( # using {fields}
+  x = as.matrix(RF_day18[, c('Longitude', 'Latitude')]), # accepts points but expects them as matrix
+  Y = RF_day18$Depth_day,  # the dependent variable
+  miles = FALSE     # EPSG 25833 is based in meters
+)
+d18_TPS <- interpolate(ras_interp_template, fit_TPS)
+plot(d18_TPS)
+d18_TPS_mask <- mask(d18_TPS, mask = sel_shp2)
+plot(d18_TPS_mask)
+
+
+
+# Automatized Kriging  
+
+## reproject to GDM 2000 PM
+sf_day18_gdm <- st_transform(sf_day18, crs = 3375)
+crs(sf_day18_gdm)
+
+fit_KRIG <- automap::autoKrige(      # using {automap}
+  formula = Depth_day ~ 1,                 # The interface is similar to {gstat} but
+  input_data = as(sf_day18_gdm, "Spatial") # {automap} makes a lot of assumptions for you
+) %>% 
+  .$krige_output %>%  # the function returns a complex object with lot's of metainfo
+  as.data.frame() %>% # we keep only the data we are interested in
+  dplyr::select(X = x1, Y = x2, Z = var1.pred) 
+d18_KRIG <- raster::rasterFromXYZ(fit_KRIG, crs = 4326) #no changes to CRS??
+plot(d18_KRIG)
+
+
+#############################
+# INTERPOLATE FOR ALL DAYS
+
+##  Use IDW
+
+# daily rainfall data join stn data
+
+RF_data_hr_stn <- RF_data_hr2 %>% 
+  filter(Datetime >= "2021-12-17 00:00" & Datetime < "2021-12-19 00:00") %>% 
+  merge(IB_stn, by = "Station.Name")
+
+str(RF_data_hr_stn)
+
+# convert df to spatial
+sf_rf_dec <- st_as_sf(RF_data_hr_stn, coords = c('Longitude', 'Latitude'), crs = 4326)
+plot(sf_rf_dec)
+
+# extract date for iteration
+un_date <- sort(unique(RF_data_hr_stn$Datetime)) # make sure date is sorted
+df_date <- as.data.frame(un_date)
+str(df_date)
+colnames(df_date) <- "Datetime"
+
+
+# PRODUCE INTERPOLATION RASTER AND MAP
+
+
+# SEPARATE INTERPOLATION AND MAPPING
+
+# produce interpolation raster only (without map)
+
+interp_list = list() #for combination
+
+for (i in 1:(nrow(df_date))) {
+  #i=1
+  date <- df_date[i,]
+  
+  #filter according to date
+  RF_data_hr <- RF_data_hr_stn %>% 
+    filter(Datetime == date)
+    #filter(Date == date)
+  
+  # convert to sf
+  sf_rf_hr <- st_as_sf(RF_data_hr, coords = c('Longitude', 'Latitude'), crs = 4326)
+  
+  
+  # Inverse Distance Weighting
+  fit_IDW <- gstat::gstat( # The setup here is quite similar to NN
+    formula = Depth_hr ~ 1,
+    locations = sf_rf_hr,
+    nmax = 10, nmin = 3,
+    set = list(idp = 0.5) # inverse distance power
+  )
+  hrly_IDW <- interpolate(ras_interp_template, fit_IDW)
+  hrly_IDW_mask <- mask(hrly_IDW, mask = sel_shp2)
+  #plot(daily_IDW_mask)
+  
+
+  
+  #counter <- counter + 1
+  interp_list[[i]] <- hrly_IDW_mask
+  #rainfall_stack[[counter]] <- daily_IDW_mask
+  
+}
+
+
+# produce maps from interpolation raster
+
+maplist <- list()
+
+for (j in 1:length(interp_list)) {
+  
+  date <- df_date[j,]
+
+  # plot map
+  hrly_IDW_map <- ggplot() +
+    geom_raster(data = as.data.frame(interp_list[[j]], xy=TRUE, na.rm = TRUE), 
+                aes(x = x, y = y, fill = var1.pred),
+                show.legend = FALSE) +
+    scale_fill_gradientn(name="Rainfall (mm)", 
+                         colors = c("#ffffcf", "#6fc4ad", "#1d7eb3", "#1a4998"),
+                         values = rescale(c(0, 10, 30, 60)),
+                         na.value = "purple",
+                         limits = c(0, 60)) +
+    #scale_fill_distiller(name="Rainfall (mm)", 
+    #                     palette = "YlGnBu", direction = 1,
+    #na.value = "purple",
+    #                     oob = scales::squish, # squish out of bound values to nearest extreme
+    #                     breaks = seq(0, 60, by = 10),
+    #                     limits = c(0, 60)) + # set fixed legend) +
+    geom_polygon(data = sel_shp2, aes(x = long, y = lat, group = group),
+                 colour = "white", fill = NA) +
+    theme_void() + 
+    theme(plot.title=element_text(size = 10)) +
+    labs(title = date) +
+    coord_fixed()
+  
+  
+  #counter <- counter + 1
+  maplist[[j]] <- hrly_IDW_map
+  #rainfall_stack[[counter]] <- daily_IDW_mask
+  
+}
+
+
+# facet mapping
+
+library(gridExtra)
+
+
+
+#extract legend
+#https://github.com/hadley/ggplot2/wiki/Share-a-legend-between-two-ggplot2-graphs
+g_legend<-function(a.gplot){
+  tmp <- ggplot_gtable(ggplot_build(a.gplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)}
+
+mylegend <- g_legend(maprf1218)
+
+facet_map <- grid.arrange(grobs = maplist, ncol = 6)
+
+#facet_all_map <- grid.arrange(facet_map, maprf1218, ncol = 2)
+
+facet_legend_map <- grid.arrange(facet_map, mylegend, 
+                                 top = "Hourly Rainfall from 17-18 Dec 2021",
+                                 ncol = 2, widths=c(9, 1))
+
+#print last plot to file
+ggsave(paste0("KLSel_rainfall_hr_202112_all2.jpg"), facet_legend_map, dpi = 400,
+       width = 16, height = 10, units = "in")
+
+#########################
+
+# ANIMATION
+
+library(animation)
+
+a = 1
+
+saveGIF({
+  
+  for (a in 1:length(maplist)){
+    
+    plot(maplist[[a]])
+    
+  }
+  
+}, movie.name = 'Rainfall_202112_hourly.gif', interval = 0.2, ani.width = 700, ani.height = 600)
+
+
+
+
