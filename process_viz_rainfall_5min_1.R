@@ -44,7 +44,7 @@ colnames(RF_data) <- c("Datetime", "Depth")
 # REMOVE values
 
 check_values <- RF_data[Depth < 0]
-  
+
 #replace value '-999' with NA
 #RF_data[Depth == "-999"] <- NA
 RF_data[, Depth := as.character(Depth)][Depth == "-999", Depth := NA]
@@ -137,8 +137,6 @@ RF_data3 <- RF_data3[!Datetime %between% c("2003-01-01 08:05:00","2004-06-30 23:
 RF_data3 <- RF_data3[!Datetime %between% c("2006-09-16 08:05:00","2007-09-12 23:55:00")]
 
 
-
-
 ######
 # AGGREGATE DATA, SCREEN DATA BY COUNT
 ## by everyday count, since looking at daily rainfall (288/day)
@@ -163,7 +161,7 @@ RF_data_dt$Hour <- as.numeric(as.character(RF_data_dt$Hour))
 #data summary for checking
 ##hour
 RF_data_hr <- RF_data_dt[, .(Depth_hr = sum(Depth, na.rm = T), cnt = sum(!is.na(Depth))),
-                    by = c("Year", "Month", "Day", "Hour")]
+                         by = c("Year", "Month", "Day", "Hour")]
 
 ##day
 RF_data_day <- RF_data_dt[, .(Depth_day = sum(Depth, na.rm = T), cnt = sum(!is.na(Depth))),
@@ -195,7 +193,7 @@ RF_data_day2 <- RF_data_day[cnt > 274] #95% of 288
 
 # summarize data by month
 RF_data_mth <- RF_data_day2[, .(Depth_mth = sum(Depth_day, na.rm = T), cnt = sum(!is.na(Depth_day))),
-                       by = c("Year", "Month")]
+                            by = c("Year", "Month")]
 
 
 ######
@@ -227,7 +225,7 @@ gg_RF_cnt_matrix <- RF_data_mth %>%
         panel.grid.major.y = element_blank(),
         legend.position="bottom") +
   labs(title = paste0(stn_name, " Data Availability"))
-  #coord_fixed(ratio = 1.5)
+#coord_fixed(ratio = 1.5)
 
 gg_RF_cnt_matrix
 
@@ -256,6 +254,7 @@ RF_data_dt2 <- RF_data_dt[RF_data_day2, on = .(Year, Month, Day)]
 # write to csv
 write.table(RF_data_dt2, paste0(stn_name, "_RF5min_clean1.csv"), sep =",", row.names = FALSE)
 
+
 #####################
 # VISUALIZATION
 
@@ -279,7 +278,7 @@ library(paletteer)
 options(stringsAsFactors = FALSE)
 
 #set working directory
-setwd('J:/Backup_main/2023/20230509_Thinkcity_review/Data')
+setwd('J:/Backup_main/2023/20230509_Thinkcity_review/Analysis/RF6122064 Stor JPS Kota Bharu')
 
 # set names and dates
 stn_name <- "RF6122064"
@@ -288,18 +287,18 @@ stn_name <- "RF6122064"
 RF_data_dt2 <- fread(file = paste0(stn_name, "_RF5min_clean1.csv"),
                  header = TRUE, sep = ",", stringsAsFactors = F)
 
+str(RF_data_dt2)
 
 #add time column
-RF_data_dt2$Time <- format(RF_data_dt2$Datetime, "%H:%M:%S")
+RF_data_dt2$Time <- format(as.POSIXct(RF_data_dt2$Datetime), "%H:%M:%S")
 
 #format columns from character to numeric
-RF_data_dt2$Year <- as.numeric(as.character(RF_data_dt2$Year))
-RF_data_dt2$Month <- as.numeric(as.character(RF_data_dt2$Month))
-RF_data_dt2$Day <- as.numeric(as.character(RF_data_dt2$Day))
-RF_data_dt2$Hour <- as.numeric(as.character(RF_data_dt2$Hour))
+#RF_data_dt2$Year <- as.numeric(as.character(RF_data_dt2$Year))
+#RF_data_dt2$Month <- as.numeric(as.character(RF_data_dt2$Month))
+#RF_data_dt2$Day <- as.numeric(as.character(RF_data_dt2$Day))
+#RF_data_dt2$Hour <- as.numeric(as.character(RF_data_dt2$Hour))
 
 #set format
-str(RF_data_dt2)
 RF_data_dt2$Datetime <- as.POSIXct(RF_data_dt2$Datetime, format = "%Y-%m-%d %H:%M")
 RF_data_dt2$Date <- as.Date(RF_data_dt2$Date, format = "%Y-%m-%d")
 RF_data_dt2$Time <- as.POSIXct(RF_data_dt2$Time, format = "%H:%M")
@@ -341,20 +340,21 @@ gg_RF_time <- RF_data_dt3 %>%
                    #date_minor_breaks = "1 day",
                    minor_breaks = NULL) + #x axis format
   scale_y_continuous(name= paste("5-min Rainfall (mm)"),
-                     breaks = seq(0, 30, by = 2), 
+                     breaks = seq(0, 100, by = 5), 
                      minor_breaks = NULL) + #y axis format
   scale_color_manual("Month", values = col_pal) +
   theme(text = element_text(family = "Roboto", color = "grey20"),
         panel.grid.major.x = element_blank(),
         legend.position = "bottom",
         axis.text.x = element_text(angle = 0, hjust = 0.5)) +
-  labs(title = paste0(stn_name, " One Day Rainfall Trend by Month (", min_date, " to ", max_date, ")")) +
+  labs(title = paste0(stn_name, ": 5-min Rainfall by Time of Day by Month"),
+       subtitle = paste0("(", min_date, " to ", max_date, ")")) +
   guides(alpha = "none", shape = "none", colour = guide_legend(nrow = 1))
 
 gg_RF_time
 
 #print last plot to file
-ggsave(paste0(stn_name, "_RFday_mth_all.jpg"), dpi = 300,
+ggsave(paste0(stn_name, "_RF_tod_mth_all.jpg"), dpi = 300,
        width = 10, height = 5, units = "in")
 
 
@@ -378,20 +378,21 @@ gg_RF_time_yr <- RF_data_dt2 %>%
                    #date_minor_breaks = "1 day",
                    minor_breaks = NULL) + #x axis format
   scale_y_continuous(name= paste("Rainfall (mm)"),
-                     breaks = seq(0, 30, by = 2), 
+                     breaks = seq(0, 100, by = 5), 
                      minor_breaks = NULL) + #y axis format
   scale_color_viridis_d("Year", direction = -1) +
   theme(text = element_text(family = "Roboto", color = "grey20"),
         panel.grid.major.x = element_blank(),
         legend.position = "bottom",
         axis.text.x = element_text(angle = 0, hjust = 0.5)) +
-  labs(title = paste0(stn_name, " One Day Rainfall Trend by Year (", min_date, " to ", max_date, ")")) +
+  labs(title = paste0(stn_name, ": 5-min Rainfall by Time of Day by Year"),
+       subtitle = paste0("(", min_date, " to ", max_date, ")")) +
   guides(alpha = "none", shape = "none", colour = guide_legend(nrow = 3))
 
 gg_RF_time_yr
 
 #print last plot to file
-ggsave(paste0(stn_name, "_RFday_yr_all.jpg"), dpi = 300,
+ggsave(paste0(stn_name, "_RF_tod_yr_all.jpg"), dpi = 300,
        width = 10, height = 5, units = "in")
 
 
@@ -418,7 +419,7 @@ ggfc_RF_time <- lazy_dt(RF_data_dt2) %>%
                    #date_minor_breaks = "1 day",
                    minor_breaks = NULL) + #x axis format
   scale_y_continuous(name= paste("5-min Rainfall (mm)"),
-                     breaks = seq(0, 30, by = 2), 
+                     breaks = seq(0, 100, by = 5), 
                      minor_breaks = NULL) + #y axis format
   scale_color_viridis_d("Year", direction = -1) +
   #scale_color_manual("Month", values = col_pal) +
@@ -430,13 +431,14 @@ ggfc_RF_time <- lazy_dt(RF_data_dt2) %>%
         strip.background = element_rect(colour="white", fill="white"),
         axis.text.y = element_text(size = 5),
         axis.text.x = element_text(angle = 0, hjust = 0.5, size = 5)) +
-  labs(title = paste0(stn_name, " One Day Rainfall Trend by Month (", min_date, " to ", max_date, ")")) +
-  guides(alpha = "none", shape = "none", colour = guide_legend(nrow = 3))
+  labs(title = paste0(stn_name, ": 5-min Rainfall by Time of Day by Month"),
+       subtitle = paste0("(", min_date, " to ", max_date, ")")) +
+  guides(alpha = "none", shape = "none", colour = guide_legend(nrow = 4))
 
 ggfc_RF_time
 
 #print last plot to file
-ggsave(paste0(stn_name, "_RFday_fct_mth1.jpg"), dpi = 300,
+ggsave(paste0(stn_name, "_RF_tod_fct_mth.jpg"), dpi = 300,
        width = 10, height = 6, units = "in")
 
 
@@ -452,7 +454,7 @@ ggfc_RF_time_yr <- RF_data_dt2 %>%
                    #date_minor_breaks = "1 day",
                    minor_breaks = NULL) + #x axis format
   scale_y_continuous(name= paste("5-min Rainfall (mm)"),
-                     breaks = seq(0, 30, by = 5), 
+                     breaks = seq(0, 100, by = 10), 
                      minor_breaks = NULL) + #y axis format
   scale_color_manual("Month", values = col_pal) +
   facet_wrap(~ Year, ncol = 8) +
@@ -463,13 +465,14 @@ ggfc_RF_time_yr <- RF_data_dt2 %>%
         strip.background = element_rect(colour = "white", fill = "white"),
         axis.text.y = element_text(size = 5),
         axis.text.x = element_text(angle = 0, hjust = 0.5, size = 5)) +
-  labs(title = paste0(stn_name, " One Day Rainfall Trend by Year (", min_date, " to ", max_date, ")")) +
+  labs(title = paste0(stn_name, ": 5-min Rainfall by Time of Day by Year"),
+       subtitle = paste0("(", min_date, " to ", max_date, ")")) +
   guides(alpha = "none", shape = "none", colour = guide_legend(nrow = 1))
 
 ggfc_RF_time_yr
 
 #print last plot to file
-ggsave(paste0(stn_name, "_RFday_fct_yr1.jpg"), dpi = 300,
+ggsave(paste0(stn_name, "_RF_tod_fct_yr.jpg"), dpi = 300,
        width = 10, height = 6, units = "in")
 
 
@@ -504,13 +507,14 @@ ggcm_RF_time <- RF_data_cumsum2 %>%
         panel.grid.major.x = element_blank(),
         legend.position = "bottom",
         axis.text.x = element_text(angle = 0, hjust = 0.5)) +
-  labs(title = paste0(stn_name, " One Day Cumulative Rainfall Trend (", min_date, " to ", max_date, ")")) +
+  labs(title = paste0(stn_name, ": 5-min Cumulative Rainfall by Time of Day by Month"),
+       subtitle = paste0("(", min_date, " to ", max_date, ")")) +
   guides(alpha = "none", shape = "none", colour = guide_legend(nrow = 1))
 
 ggcm_RF_time
 
 #print last plot to file
-ggsave(paste0(stn_name, "_RFcumday_all.jpg"), dpi = 300,
+ggsave(paste0(stn_name, "_RFcum_tod_all.jpg"), dpi = 300,
        width = 10, height = 5, units = "in")
 
 ggplotly(ggcm_RF_time, #tooltip = "text",
@@ -538,7 +542,7 @@ ggfcm_RF_time <- lazy_dt(RF_data_cumsum) %>%
                    #date_minor_breaks = "1 day",
                    minor_breaks = NULL) + #x axis format
   scale_y_continuous(name= paste("Cumulative 5-min rainfall (mm)"),
-                     breaks = seq(0, 500, by = 50), 
+                     breaks = seq(0, 500, by = 25), 
                      minor_breaks = NULL) + #y axis format
   scale_color_viridis_d("Year", direction = -1) +
   #scale_color_manual("Month2", values = col_pal) +
@@ -550,13 +554,14 @@ ggfcm_RF_time <- lazy_dt(RF_data_cumsum) %>%
         strip.background = element_rect(colour = "white", fill = "white"),
         axis.text.y = element_text(size = 5),
         axis.text.x = element_text(angle = 0, hjust = 0.5, size = 5)) +
-  labs(title = paste0(stn_name, " One Day Cumulative Rainfall Trend (", min_date, " to ", max_date, ")")) +
-  guides(alpha = "none", shape = "none", colour = guide_legend(nrow = 3))
+  labs(title = paste0(stn_name, ": 5-min Cumulative Rainfall by Time of Day by Month"),
+       subtitle = paste0("(", min_date, " to ", max_date, ")")) +
+  guides(alpha = "none", shape = "none", colour = guide_legend(nrow = 4))
 
 ggfcm_RF_time
 
 #print last plot to file
-ggsave(paste0(stn_name, "_RFcumday_fc_mth1.jpg"), dpi = 300,
+ggsave(paste0(stn_name, "_RFcum_tod_fct_mth.jpg"), dpi = 300,
        width = 10, height = 6, units = "in")
 
 
@@ -584,15 +589,101 @@ ggfcy_RF_time <- RF_data_cumsum %>%
         strip.background = element_rect(colour = "white", fill = "white"),
         axis.text.y = element_text(size = 5),
         axis.text.x = element_text(angle = 0, hjust = 0.5, size = 5)) +
-  labs(title = paste0(stn_name, " One Day Cumulative Rainfall Trend (", min_date, " to ", max_date, ")")) +
+  labs(title = paste0(stn_name, ": 5-min Cumulative Rainfall by Time of Day by Year"),
+       subtitle = paste0("(", min_date, " to ", max_date, ")")) +
   guides(alpha = "none", shape = "none", colour = guide_legend(nrow = 1))
 
 ggfcy_RF_time
 
 #print last plot to file
-ggsave(paste0(stn_name, "_RFcumday_fc_yr1.jpg"), dpi = 300,
+ggsave(paste0(stn_name, "_RFcum_tod_fct_yr.jpg"), dpi = 300,
        width = 10, height = 6, units = "in")
 
 ######
+# FACET ALL YEARS FOR EACH MONTH
+
+mth_list <- data.frame(c(1:12))
+
+
+# 5-MIN DATA
+
+i = 1
+
+for (i in 1:(nrow(mth_list))) {
+  #i=1
+  sel_mth <- mth_list[i,]
+  
+  ggfc_RF_tod_yr_mth <- RF_data_dt2[Month == sel_mth] %>% 
+    ggplot(aes(x = Time, y = Depth, group = Date)) +
+    geom_line(alpha = 0.5, size = 0.5, color = "steelblue", na.rm = T) +
+    theme_bw(base_size = 10) +
+    scale_x_datetime(name = "Time of day", date_labels = "%H:00",
+                     date_breaks = "6 hour",
+                     expand = c(0, 0),
+                     #date_minor_breaks = "1 day",
+                     minor_breaks = NULL) + #x axis format
+    scale_y_continuous(name= paste("5-min Rainfall (mm)"),
+                       breaks = seq(0, 100, by = 10), 
+                       minor_breaks = NULL) + #y axis format
+    facet_wrap(~ Year, ncol = 8) +
+    theme(text = element_text(family = "Roboto", color = "grey20"),
+          panel.grid.major.x = element_blank(),
+          legend.position = "none",
+          strip.text = element_text(size = 6),
+          strip.background = element_rect(colour = "white", fill = "white"),
+          axis.text.y = element_text(size = 5),
+          axis.text.x = element_text(angle = 0, hjust = 0.5, size = 5)) +
+    labs(title = paste0(stn_name, ": 5-min Rainfall by Time of Day in ", month.name[sel_mth]),
+         subtitle = paste0("(", min_date, " to ", max_date, ")")) +
+    guides(alpha = "none", shape = "none")
+  
+  ggfc_RF_tod_yr_mth
+  
+  #print last plot to file
+  ggsave(paste0(stn_name, "_RF_tod_fct_yr-mth", sel_mth, ".jpg"), dpi = 300,
+         width = 10, height = 6, units = "in")
+  
+}
+
+
+# CUMULATIVE DATA
+
+j = 1
+
+for (j in 1:(nrow(mth_list))) {
+  
+  sel_mth <- mth_list[j,]
+  
+  ggfc_RFcum_tod_yr_mth <- RF_data_cumsum[Month == sel_mth] %>% 
+    ggplot(aes(x = Time, y = Depth_cum, group = Date)) +
+    geom_line(alpha = 0.5, size = 0.5, color = "steelblue",  na.rm = T) +
+    theme_bw(base_size = 10) +
+    scale_x_datetime(name = "Time of day", date_labels = "%H:00",
+                     date_breaks = "6 hour",
+                     expand = c(0, 0),
+                     #date_minor_breaks = "1 day",
+                     minor_breaks = NULL) + #x axis format
+    scale_y_continuous(name= paste("Cumulative 5-min rainfall (mm)"),
+                       breaks = seq(0, 500, by = 50), 
+                       minor_breaks = NULL) + #y axis format
+    facet_wrap(~ Year, ncol = 8) +
+    theme(text = element_text(family = "Roboto", color = "grey20"),
+          panel.grid.major.x = element_blank(),
+          legend.position = "bottom",
+          strip.text = element_text(size = 6),
+          strip.background = element_rect(colour = "white", fill = "white"),
+          axis.text.y = element_text(size = 5),
+          axis.text.x = element_text(angle = 0, hjust = 0.5, size = 5)) +
+    labs(title = paste0(stn_name, ": 5-min Cumulative Rainfall by Time of Day in ", month.name[sel_mth]),
+         subtitle = paste0("(", min_date, " to ", max_date, ")")) +
+    guides(alpha = "none", shape = "none")
+  
+  ggfc_RFcum_tod_yr_mth
+  
+  #print last plot to file
+  ggsave(paste0(stn_name, "_RFcum_tod_fct_yr-mth", sel_mth, ".jpg"), dpi = 300,
+         width = 10, height = 6, units = "in")
+
+}
 
 
